@@ -1,0 +1,172 @@
+[
+    {
+        "id": "d05e9b458f5c5975",
+        "type": "tab",
+        "label": "Поток 1",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "983eac95d7a7ad30",
+        "type": "inject",
+        "z": "d05e9b458f5c5975",
+        "name": "Загрузить лог в ручную",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 170,
+        "y": 440,
+        "wires": [
+            [
+                "af2a7a9e2d9f4392"
+            ]
+        ]
+    },
+    {
+        "id": "18adbce16e11f968",
+        "type": "watch",
+        "z": "d05e9b458f5c5975",
+        "name": "Следить за log.txt",
+        "files": "C:\\Users\\koval\\OneDrive\\Desktop\\Курсовая\\Kovalchuk\\data\\log.txt",
+        "recursive": "",
+        "x": 190,
+        "y": 540,
+        "wires": [
+            [
+                "af2a7a9e2d9f4392"
+            ]
+        ]
+    },
+    {
+        "id": "af2a7a9e2d9f4392",
+        "type": "file in",
+        "z": "d05e9b458f5c5975",
+        "name": "Читать log.txt",
+        "filename": "C:\\Users\\koval\\OneDrive\\Desktop\\Курсовая\\Kovalchuk\\data\\log.txt",
+        "filenameType": "str",
+        "format": "utf8",
+        "chunk": false,
+        "sendError": false,
+        "encoding": "none",
+        "allProps": false,
+        "x": 400,
+        "y": 440,
+        "wires": [
+            [
+                "6c2f1f151092b661"
+            ]
+        ]
+    },
+    {
+        "id": "6c2f1f151092b661",
+        "type": "function",
+        "z": "d05e9b458f5c5975",
+        "name": "Разбор лога",
+        "func": "\nconst T = 1;\n\nconst RANGES = {\n    s1: [0, 100],\n    s2: [0, 14],\n    s3: [2, 400]\n};\n\nconst text = String(msg.payload).replace(/^\\uFEFF/, '');\nconst sql = [];\n\nfunction sqlString(value) {\n    return \"'\" + String(value).replace(/'/g, \"''\") + \"'\";\n}\n\ntext.split(/\\r?\\n/).forEach(raw => {\n    const line = raw.trim();\n    if (!line) return;\n\n    const parts = line.split(/\\s+/);\n    const kind = parts[0];\n\n    const f = {};\n\n    parts.slice(1).forEach(p => {\n        const i = p.indexOf('=');\n        if (i > 0) {\n            f[p.substring(0, i)] = p.substring(i + 1);\n        }\n    });\n\n    const n = parseInt(f.n);\n\n    if (isNaN(n) || n < 0) return;\n\n    const t = n * T;\n\n    if (kind === 'DATA') {\n\n        ['s1', 's2', 's3'].forEach(s => {\n\n            const v = Number(f[s]);\n\n            // Проверка наличия и корректности значения\n            if (\n                f[s] === undefined ||\n                f[s].trim() === '' ||\n                !Number.isFinite(v) ||\n                v < RANGES[s][0] ||\n                v > RANGES[s][1]\n            ) {\n\n                // Запись неисправности FAULT\n                const message = 'датчик ' + s + ' вне диапазона';\n\n                sql.push(\n                    `INSERT INTO events(n,t_s,type,message)\n                    VALUES(${n},${t},'FAULT',${sqlString(message)});`\n                );\n\n            } else {\n\n                // Запись показаний датчика\n                sql.push(\n                    `INSERT INTO readings(n,t_s,sensor,value)\n                    VALUES(${n},${t},${sqlString(s)},${v});`\n                );\n\n            }\n        });\n\n    } else if (kind === 'EVENT') {\n\n        // Запись события THRESHOLD или NORMAL\n        if (f.type === 'THRESHOLD' || f.type === 'NORMAL') {\n\n            sql.push(\n                `INSERT INTO events(n,t_s,type,message)\n                VALUES(${n},${t},${sqlString(f.type)},'');`\n            );\n\n        }\n    }\n});\n\n// Формирование SQL-файла\nconst head =\n    'BEGIN;\\n' +\n    'DELETE FROM readings;\\n' +\n    'DELETE FROM events;\\n' ;\n\nconst result = head + sql.join('\\n') + '\\nCOMMIT;\\n';\n\n// Второй выход подключается к узлу file\nreturn [null, { payload: result }];\n",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 590,
+        "y": 440,
+        "wires": [
+            [],
+            [
+                "93df41e28833232d"
+            ]
+        ]
+    },
+    {
+        "id": "93df41e28833232d",
+        "type": "file",
+        "z": "d05e9b458f5c5975",
+        "name": "Записать load.sql",
+        "filename": "C:\\Users\\koval\\OneDrive\\Desktop\\Курсовая\\Kovalchuk\\db\\load.sql",
+        "filenameType": "str",
+        "appendNewline": true,
+        "createDir": true,
+        "overwriteFile": "true",
+        "encoding": "none",
+        "x": 790,
+        "y": 500,
+        "wires": [
+            [
+                "eafa9db74c43620c"
+            ]
+        ]
+    },
+    {
+        "id": "eafa9db74c43620c",
+        "type": "exec",
+        "z": "d05e9b458f5c5975",
+        "command": "\"C:\\Users\\koval\\OneDrive\\Desktop\\Курсовая\\tools\\sqlite\\sqlite3.exe\" -init \"C:\\Users\\koval\\OneDrive\\Desktop\\Курсовая\\Kovalchuk\\db\\schema.sql\" \"C:\\Users\\koval\\OneDrive\\Desktop\\Курсовая\\Kovalchuk\\db\\variant.db\" \".read C:\\Users\\koval\\OneDrive\\Desktop\\Курсовая\\Kovalchuk\\db\\load.sql\"",
+        "addpay": "",
+        "append": "",
+        "useSpawn": "false",
+        "timer": "",
+        "winHide": false,
+        "oldrc": false,
+        "name": "Загрузить в базу",
+        "x": 1010,
+        "y": 500,
+        "wires": [
+            [
+                "c35b8cb740a2c884"
+            ],
+            [
+                "0e0b0c6d45d5102c"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "c35b8cb740a2c884",
+        "type": "debug",
+        "z": "d05e9b458f5c5975",
+        "name": "Ответ sqlite3",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1210,
+        "y": 460,
+        "wires": []
+    },
+    {
+        "id": "0e0b0c6d45d5102c",
+        "type": "debug",
+        "z": "d05e9b458f5c5975",
+        "name": "Ошибки sqlite3",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1220,
+        "y": 500,
+        "wires": []
+    }
+]
